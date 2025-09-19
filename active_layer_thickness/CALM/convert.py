@@ -28,19 +28,19 @@ for first, last in zip(
         108,
         147,
         156,
-        179,
-        196,
-        225,
-        234,
-        241,
-        247,
-        251,
-        258,
-        265,
-        270,
-        286,
-        336,
-        350,
+        182,
+        199,
+        228,
+        237,
+        244,
+        250,
+        254,
+        261,
+        268,
+        273,
+        289,
+        339,
+        353,
     ],
     [
         72,
@@ -48,20 +48,20 @@ for first, last in zip(
         104,
         142,
         152,
-        175,
-        192,
-        221,
-        230,
-        236,
-        243,
-        247,
-        254,
-        261,
-        266,
-        281,
-        332,
-        346,
-        352,
+        178,
+        195,
+        224,
+        233,
+        239,
+        246,
+        250,
+        257,
+        264,
+        269,
+        284,
+        335,
+        349,
+        355,
     ],
 ):
     dfs.append(pd.read_excel(local_source, skiprows=first - 2, nrows=last - first + 1))
@@ -88,10 +88,6 @@ assert len(query) == 1
 if query["LAT"].iloc[0] < 60:
     df.loc[df["Site Name"] == "Andryushkino", "LAT"] += 60.0
 
-# Cleanup the string columns
-for col in ["Site Code", "Site Name", "Method"]:
-    df[col] = df[col].astype(str).str.strip()
-
 # Cleanup the data columns
 years = [c for c in df.columns if isinstance(c, int)]
 for year in years:
@@ -103,27 +99,7 @@ for year in years:
     col = col.replace("", np.nan)
     df[year] = col.astype(float)
 
-# Setup target grid and only keep cells where there is some data
-GRID_RES = 1.0
-lat = np.linspace(-90, 90, int(round(180.0 / GRID_RES)) + 1)
-lon = np.linspace(-180, 180, int(round(360.0 / GRID_RES)) + 1)
-df.rename(columns={y: str(y) for y in years}).to_parquet("df.parquet")
-df = (
-    df.groupby(
-        [
-            pd.cut(df["LAT"], lat),
-            pd.cut(df["LONG"], lon),
-        ]
-    )
-    .median(numeric_only=True)
-    .drop(columns=["LAT", "LONG"])
-    .reset_index()
-)
 df = df[~df[years].isna().all(axis=1)].reset_index(drop=True)
-
-# The pandas cuts leaves these dimensions as intervals, we want the midpoint.
-for col in ["LAT", "LONG"]:
-    df[col] = df[col].apply(lambda x: x.mid)
 
 tb = np.array(
     [
@@ -136,12 +112,16 @@ t = np.array([tb[i, 0] + 0.5 * (tb[i, 1] - tb[i, 0]) for i in range(tb.shape[0])
 ds = xr.DataArray(
     df[years].to_numpy().T,
     coords={"time": t},
-    dims=("time", "data"),
+    dims=("time", "sites"),
     attrs={"long_name": "Average thaw depth at end-of-season", "units": "cm"},
 ).to_dataset(name="alt")
+ds["site_code"] = xr.DataArray(df["Site Code"].to_numpy(), dims=("sites"))
+ds["site_code"].attrs = {"long_name":"CALM site code"}
+ds["site_name"] = xr.DataArray(df["Site Name"].to_numpy(), dims=("sites"))
+ds["site_name"].attrs = {"long_name":"CALM site name"}
 ds["time_bnds"] = xr.DataArray(tb, dims=("time", "nb"))
-ds["lat"] = xr.DataArray(df["LAT"].to_numpy(), dims=("data"))
-ds["lon"] = xr.DataArray(df["LONG"].to_numpy(), dims=("data"))
+ds["lat"] = xr.DataArray(df["LAT"].to_numpy(), dims=("sites"))
+ds["lon"] = xr.DataArray(df["LONG"].to_numpy(), dims=("sites"))
 ds.attrs = {
     "title": "CALM: Circumpolar Active Layer Monitoring Network",
     "versions": "2022",
