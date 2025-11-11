@@ -108,7 +108,8 @@ tb = np.array(
     ]
 ).T
 t = np.array([tb[i, 0] + 0.5 * (tb[i, 1] - tb[i, 0]) for i in range(tb.shape[0])])
-
+start_year = years[0]
+end_year = years[-1]
 ds = xr.DataArray(
     df[years].to_numpy().T,
     coords={"time": t},
@@ -137,7 +138,7 @@ ds.attrs = {
 }""",
 }
 ds.to_netcdf(
-    "CALM.nc",
+    f"CALM_{start_year}-{end_year}.nc",
     encoding={
         "time": {"units": "days since 1850-01-01", "bounds": "time_bnds"},
         "time_bnds": {"units": "days since 1850-01-01"},
